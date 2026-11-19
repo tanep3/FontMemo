@@ -4,6 +4,7 @@
 
 import { parseCmap, type Coverage } from "./cmap";
 import { fontDisplayName, parseFaceInfo, sniffFormat, type FontFormat } from "./fontMeta";
+import { randomUuid, sha256Hex } from "./sha256";
 import { extractFontCandidates, isZip, ZipLimitError } from "./unzip";
 
 export interface StoredFont {
@@ -89,13 +90,8 @@ function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequ
 }
 
 // ---------- hashing ----------
-
-async function sha256Hex(buf: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
+// sha256Hex / randomUuid live in ./sha256: crypto.subtle and
+// crypto.randomUUID need a secure context, so both have fallbacks.
 
 // ---------- public API ----------
 
@@ -110,10 +106,22 @@ export async function addFont(blob: Blob, fallbackName?: string): Promise<FontMe
     fontDisplayName(buf) ??
     (fallbackName ? fallbackName.replace(/\.[^.]+$/, "") : null) ??
     "Font";
-  const coverage = format === "woff" || format === "woff2" ? null : parseCmap(buf);
-  const face = parseFaceInfo(buf);
+  // Coverage and face info are enrichments: a parser tripping over an
+  // unusual table must degrade to "unknown", never kill the import.
+  let coverage: Coverage | null = null;
+  try {
+    coverage = format === "woff" || format === "woff2" ? null : parseCmap(buf);
+  } catch {
+    coverage = null;
+  }
+  let face: ReturnType<typeof parseFaceInfo> = null;
+  try {
+    face = parseFaceInfo(buf);
+  } catch {
+    face = null;
+  }
   const record: StoredFont = {
-    id: crypto.randomUUID(),
+    id: randomUuid(),
     name,
     format,
     blob,
