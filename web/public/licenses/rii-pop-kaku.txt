@@ -1,0 +1,19 @@
+りいポップ角 (Rii Pop Kaku)
+Copyright © 2009-2024 Rii Aoi (あおいりぃ)
+
+配布元 / Source:
+https://aoirii.babyblue.jp/font/riipopkk/index.html
+
+利用規約 / Terms (author's site):
+https://aoirii.babyblue.jp/font/kiyaku.htm
+
+このフォントは、作者の利用規約により、Webフォントとしての利用
+（ファイル形式の変換を含む）と、プログラムへの同梱・埋め込みが
+許可されています。FontMemo では描画用 Web フォントとして同梱して
+おり、フォントファイル単体のダウンロードを促す機能は設けていません。
+フォントファイルの無断転載・再配布・販売は禁止されています。
+
+This font is bundled in FontMemo as a rendering web font under the
+author's terms of use, which permit web-font use (including format
+conversion) and embedding in programs. Standalone redistribution or
+sale of the font file is prohibited by the author.

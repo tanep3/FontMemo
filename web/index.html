@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7e8d5" />
+    <title>FontMemo</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  </head>
+  <body>
+    <header class="topbar">
+      <img class="app-icon" src="./icons/icon-192.png" alt="" width="40" height="40" />
+      <div class="title-block">
+        <h1>FontMemo</h1>
+        <p class="tagline" data-i18n="tagline"></p>
+      </div>
+      <span class="version" id="versionLabel"></span>
+      <button type="button" class="chip-button" id="langButton"></button>
+      <button type="button" class="chip-button" id="creditsButton" data-i18n="credits"></button>
+    </header>
+
+    <main class="column">
+      <section class="card" id="styleCard">
+        <h2 class="card-label" data-i18n="styleLabel"></h2>
+        <p class="note style-hint" data-i18n="styleHint"></p>
+        <div class="style-row">
+          <label for="styleFontSelect" data-i18n="styleFont"></label>
+          <select id="styleFontSelect"></select>
+        </div>
+        <div class="style-row">
+          <label for="styleScaleRange" data-i18n="styleSize"></label>
+          <input type="range" id="styleScaleRange" min="0.5" max="2.5" step="0.1" />
+          <output id="styleScaleOut"></output>
+        </div>
+        <div class="style-row">
+          <button type="button" class="toggle-button" id="boldButton" aria-pressed="false"><b>B</b></button>
+          <button type="button" class="toggle-button" id="italicButton" aria-pressed="false"><i>I</i></button>
+          <span class="style-spacer"></span>
+          <button type="button" class="soft-button" id="clearStyleButton" data-i18n="styleClear"></button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-label" data-i18n="textLabel"></h2>
+        <div
+          id="editor"
+          class="editor is-empty"
+          contenteditable="true"
+          role="textbox"
+          aria-multiline="true"
+          spellcheck="false"
+        ></div>
+      </section>
+
+
+
+      <section class="card">
+        <h2 class="card-label" data-i18n="settingsLabel"></h2>
+
+        <div class="setting-row">
+          <label for="lineHeightRange" data-i18n="lineHeight"></label>
+          <input type="range" id="lineHeightRange" min="1.1" max="2.2" step="0.05" />
+          <output id="lineHeightOut"></output>
+        </div>
+        <div class="setting-row">
+          <label for="marginXRange" data-i18n="marginX"></label>
+          <input type="range" id="marginXRange" min="0" max="64" step="1" />
+          <output id="marginXOut"></output>
+        </div>
+        <div class="setting-row">
+          <label for="marginYRange" data-i18n="marginY"></label>
+          <input type="range" id="marginYRange" min="0" max="80" step="1" />
+          <output id="marginYOut"></output>
+        </div>
+
+        <div class="setting-row">
+          <span class="row-label" data-i18n="align"></span>
+          <div class="seg" id="alignSeg">
+            <button type="button" data-value="left" data-i18n="alignLeft"></button>
+            <button type="button" data-value="center" data-i18n="alignCenter"></button>
+            <button type="button" data-value="right" data-i18n="alignRight"></button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <span class="row-label" data-i18n="width"></span>
+          <div class="seg" id="widthSeg">
+            <button type="button" data-value="250">250px</button>
+            <button type="button" data-value="384">384px<small>200dpi</small></button>
+            <button type="button" data-value="576">576px<small>300dpi</small></button>
+            <button type="button" data-value="custom" data-i18n="widthCustom"></button>
+          </div>
+          <input type="number" id="customWidthInput" min="100" max="2000" step="1" hidden />
+        </div>
+
+        <div class="setting-row">
+          <span class="row-label" data-i18n="mode"></span>
+          <div class="seg" id="modeSeg">
+            <button type="button" data-value="normal" data-i18n="modeNormal"></button>
+            <button type="button" data-value="sideways" data-i18n="modeSideways"></button>
+          </div>
+        </div>
+      </section>
+
+      <div class="warning" id="warningBox" hidden>
+        <p id="warningText"></p>
+        <p class="missing" id="missingText" hidden></p>
+      </div>
+
+      <section class="card">
+        <h2 class="card-label" data-i18n="previewLabel"></h2>
+        <div class="preview-stack" id="previewStack" hidden>
+          <canvas id="previewCanvas"></canvas>
+          <canvas id="markCanvas" class="mark-layer" hidden></canvas>
+        </div>
+        <p class="preview-empty" id="previewEmpty" data-i18n="previewEmpty"></p>
+        <div class="action-row">
+                <button type="button" class="primary-button" id="saveButton" data-i18n="save"></button>
+                <button type="button" class="secondary-button" id="shareButton" data-i18n="share"></button>
+                <span class="generating" id="generatingLabel" hidden></span>
+              </div>
+      </section>
+
+      <section class="card" id="fontCard">
+        <h2 class="card-label" data-i18n="fontLabel"></h2>
+
+        <div class="font-list" id="fontList"></div>
+
+        <div class="specimen" id="specimen" hidden>
+          <div class="specimen-sample" id="specimenSample"></div>
+          <p class="specimen-meta"><span id="specimenName"></span> · <span id="specimenMeta"></span></p>
+          <div class="specimen-actions">
+            <button type="button" class="soft-button" id="useFontButton" data-i18n="useFont"></button>
+            <button type="button" class="danger-button" id="deleteFontButton" hidden></button>
+          </div>
+        </div>
+
+        <div class="import-row">
+          <button type="button" class="soft-button" id="importButton" data-i18n="importButton"></button>
+          <a class="soft-button link-button" id="findFontsButton" href="https://fontfree.me/" target="_blank" rel="noopener" data-i18n="findFonts"></a>
+        </div>
+        <p class="note" data-i18n="importNote"></p>
+        <p class="note" data-i18n="findGuide"></p>
+        <p class="status" id="importMessage" hidden></p>
+        <input
+          type="file"
+          id="fontFileInput"
+          hidden
+          accept=".ttf,.otf,.ttc,.woff,.woff2,.zip,application/zip,application/x-zip-compressed"
+        />
+      </section>
+
+
+
+
+    </main>
+
+    <dialog id="creditsDialog">
+      <h2 data-i18n="creditsTitle"></h2>
+      <p data-i18n="creditsIntro"></p>
+      <ul class="credits-list" id="creditsList"></ul>
+      <p class="about" data-i18n="aboutText"></p>
+      <button type="button" class="soft-button" id="creditsClose" data-i18n="close"></button>
+    </dialog>
+
+    <script type="module" src="/src/app/main.ts"></script>
+  </body>
+</html>
