@@ -246,8 +246,13 @@ export function layoutText(segments: SegmentInput[], opts: LayoutOptions): Layou
       y += line.height;
     }
     const width = Math.ceil(blockWidth) + opts.marginX * 2;
-    const height = y + opts.marginY;
-    if (height > opts.paperWidth) return { ok: false, reason: "block-too-tall" };
+    const contentHeight = y + opts.marginY;
+    if (contentHeight > opts.paperWidth) return { ok: false, reason: "block-too-tall" };
+    // The block height IS the print width: the canvas is exactly
+    // paperWidth tall (lines stack from the top margin, the rest stays
+    // white), so the rotated image is exactly the paper width, the
+    // same contract as normal mode's fixed width.
+    const height = opts.paperWidth;
     if (!withinCaps(height, width, opts.caps)) return { ok: false, reason: "too-long" };
     return { ok: true, width, height, finalWidth: height, finalHeight: width, lines };
   }

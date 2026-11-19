@@ -90,11 +90,13 @@ test("sideways: block taller than the paper width is rejected", () => {
   assert.deepEqual(r, { ok: false, reason: "block-too-tall" });
 });
 
-test("sideways: final size is the rotated size", () => {
+test("sideways: the block height is exactly the paper width", () => {
   const r = layoutText([seg("あい\nう")], { ...base, mode: "sideways", paperWidth: 120 });
   assert.ok(r.ok);
-  assert.equal(r.height, 2 * 30 + 20);
-  assert.equal(r.finalWidth, r.height);
+  // Content is 2 lines (2*30 + 20 margins = 80), but the block is padded
+  // to the full paper width so the rotated image is exactly 120 wide.
+  assert.equal(r.height, 120);
+  assert.equal(r.finalWidth, 120);
   assert.equal(r.finalHeight, r.width);
   assert.equal(r.width, 20 + 20);
 });
