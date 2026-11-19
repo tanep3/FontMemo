@@ -20,6 +20,9 @@ export interface LayoutOptions {
   marginX: number;
   marginY: number;
   align: "left" | "center" | "right";
+  /** Per-paragraph alignment overrides, indexed like the paragraphs
+   *  formed by splitting the text on "\n"; missing entries use align. */
+  paragraphAligns?: ReadonlyArray<"left" | "center" | "right" | undefined>;
   mode: "normal" | "sideways";
   paperWidth: number;
   caps: CanvasCaps;
@@ -236,11 +239,12 @@ export function layoutText(segments: SegmentInput[], opts: LayoutOptions): Layou
       0,
       ...rawLines.map((l) => l.chars.reduce((a, c) => a + c.width, 0)),
     );
-    for (const raw of rawLines) {
+    for (const [lineIdx, raw] of rawLines.entries()) {
+      const align = opts.paragraphAligns?.[lineIdx] ?? opts.align;
       const lineWidth = raw.chars.reduce((a, c) => a + c.width, 0);
       let x = opts.marginX;
-      if (opts.align === "center") x = opts.marginX + (blockWidth - lineWidth) / 2;
-      else if (opts.align === "right") x = opts.marginX + (blockWidth - lineWidth);
+      if (align === "center") x = opts.marginX + (blockWidth - lineWidth) / 2;
+      else if (align === "right") x = opts.marginX + (blockWidth - lineWidth);
       const line = buildLine(raw.chars, y, x, raw.start);
       lines.push(line);
       y += line.height;
@@ -259,12 +263,13 @@ export function layoutText(segments: SegmentInput[], opts: LayoutOptions): Layou
 
   const contentWidth = Math.max(1, opts.paperWidth - opts.marginX * 2);
   paragraphs.forEach((p, idx) => {
+    const align = opts.paragraphAligns?.[idx] ?? opts.align;
     const wrapped = wrapParagraph(p, contentWidth);
     for (const w of wrapped) {
       const lineWidth = w.reduce((a, c) => a + c.width, 0);
       let x = opts.marginX;
-      if (opts.align === "center") x = opts.marginX + Math.max(0, (contentWidth - lineWidth) / 2);
-      else if (opts.align === "right") x = opts.marginX + Math.max(0, contentWidth - lineWidth);
+      if (align === "center") x = opts.marginX + Math.max(0, (contentWidth - lineWidth) / 2);
+      else if (align === "right") x = opts.marginX + Math.max(0, contentWidth - lineWidth);
       const line = buildLine(w, y, x, paraStarts[idx]);
       lines.push(line);
       y += line.height;

@@ -81,6 +81,7 @@ const editor = new Editor(editorRoot);
 const styleFontSelect = $<HTMLSelectElement>("styleFontSelect");
 const styleScaleRange = $<HTMLInputElement>("styleScaleRange");
 const styleScaleOut = $<HTMLOutputElement>("styleScaleOut");
+const alignSeg = $("alignSeg");
 const boldButton = $<HTMLButtonElement>("boldButton");
 const italicButton = $<HTMLButtonElement>("italicButton");
 const clearStyleButton = $<HTMLButtonElement>("clearStyleButton");
@@ -341,6 +342,7 @@ async function regenerate(): Promise<void> {
         marginX: settings.marginX,
         marginY: settings.marginY,
         align: settings.align,
+        paragraphAligns: editor.readAligns(),
         mode: settings.mode,
         paperWidth,
         caps: platformCaps(),
@@ -485,6 +487,21 @@ function paintToggle(button: HTMLButtonElement, on: boolean): void {
   button.setAttribute("aria-pressed", String(on));
 }
 
+// Alignment is a paragraph property: the seg shows and sets the
+// alignment of the paragraph at the caret (or of every paragraph a
+// selection touches). With no caret it edits the default alignment.
+const alignButtons = Array.from(alignSeg.querySelectorAll<HTMLButtonElement>("button[data-value]"));
+
+function caretOrRange(): { start: number; end: number } | null {
+  return editor.selectionRange() ?? savedRange;
+}
+
+function paintAlignSeg(): void {
+  const range = caretOrRange();
+  const current = (range ? editor.alignAt(range.start) : undefined) ?? settings.align;
+  for (const b of alignButtons) b.classList.toggle("on", b.dataset.value === current);
+}
+
 function refreshStyleBar(): void {
   const range = effectiveRange();
   if (range) {
@@ -512,6 +529,7 @@ function refreshStyleBar(): void {
     paintToggle(boldButton, settings.bold);
     paintToggle(italicButton, settings.italic);
   }
+  paintAlignSeg();
 }
 
 styleFontSelect.addEventListener("change", () => {
@@ -580,8 +598,25 @@ clearStyleButton.addEventListener("click", () => {
   }
 });
 
+for (const b of alignButtons) {
+  b.addEventListener("click", () => {
+    const value = b.dataset.value as Settings["align"];
+    const range = caretOrRange();
+    if (range) {
+      applyingStyle = true;
+      editor.applyAlignToRange(range.start, range.end, value);
+      applyingStyle = false;
+    } else {
+      settings.align = value;
+      saveSettings(settings);
+      void regenerate();
+    }
+    paintAlignSeg();
+  });
+}
+
 // Buttons must not steal the editor's focus/selection when tapped.
-for (const button of [boldButton, italicButton, clearStyleButton]) {
+for (const button of [boldButton, italicButton, clearStyleButton, ...alignButtons]) {
   button.addEventListener("pointerdown", (e) => e.preventDefault());
 }
 
@@ -849,7 +884,6 @@ function initSettingsControls(): void {
   bindRange("marginXRange", "marginXOut", () => settings.marginX, (v) => (settings.marginX = v), (v) => `${v}px`);
   bindRange("marginYRange", "marginYOut", () => settings.marginY, (v) => (settings.marginY = v), (v) => `${v}px`);
 
-  bindSeg("alignSeg", () => settings.align, (v) => (settings.align = v as Settings["align"]));
   bindSeg("modeSeg", () => settings.mode, (v) => (settings.mode = v as Settings["mode"]));
 
   const widthSeg = $("widthSeg");

@@ -101,6 +101,35 @@ test("sideways: the block height is exactly the paper width", () => {
   assert.equal(r.width, 20 + 20);
 });
 
+test("per-paragraph alignment overrides the default for that paragraph only", () => {
+  const r = layoutText([seg("あい\nうえお")], {
+    ...base,
+    align: "left",
+    paragraphAligns: [undefined, "right"],
+  });
+  assert.ok(r.ok);
+  assert.equal(r.lines.length, 2);
+  // Paragraph 1 keeps the default (left): starts at the margin.
+  assert.equal(r.lines[0].segments[0].x, 10);
+  // Paragraph 2 is right-aligned: its end touches the right content edge.
+  const l2 = r.lines[1];
+  const end = Math.max(...l2.segments.map((s) => s.x + s.width));
+  assert.equal(end, 100 - 10);
+});
+
+test("sideways: per-paragraph alignment positions each line in the block", () => {
+  const r = layoutText([seg("あい\nう")], {
+    ...base,
+    mode: "sideways",
+    paperWidth: 120,
+    paragraphAligns: ["left", "right"],
+  });
+  assert.ok(r.ok);
+  // Block width is the longest line (20). The short line right-aligns.
+  assert.equal(r.lines[0].segments[0].x, 10);
+  assert.equal(r.lines[1].segments[0].x, 10 + (20 - 10));
+});
+
 test("caps: an over-long image is rejected, not truncated", () => {
   const r = layoutText([seg("あ")], { ...base, caps: { maxLongSide: 50, maxArea: 100000 } });
   assert.deepEqual(r, { ok: false, reason: "too-long" });

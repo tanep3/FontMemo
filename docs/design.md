@@ -92,7 +92,7 @@ PNG Blob をプレビュー時点で作っておくのは、Web Share API の制
 **core/layout.ts**（レイアウトはフォント解析に依存しない。欠字判定は cmap.ts、マーカー位置計算はレイアウト結果と欠字集合から別関数で行う）
 
 - `layoutText(text: string, opts: LayoutOptions): LayoutResult`
-- `LayoutOptions = { fontStack, fontSize, lineHeightFactor, wrapWidth: number | null, margins, align, mode: 'normal' | 'sideways' }`（wrapWidth が null のとき改行のみで分割＝横モードの行）
+- `LayoutOptions = { fontStack, fontSize, lineHeightFactor, wrapWidth: number | null, margins, align, mode: 'normal' | 'sideways' }`（wrapWidth が null のとき改行のみで分割＝横モードの行）。そろえは段落単位でも指定でき、`paragraphAligns`（改行で分けた段落と同順）がある段落は全体の `align` より優先する。編集欄では段落ブロックの属性として保持し、スタイル欄のそろえがカーソル位置の段落（または選択範囲が触れる段落）に適用する
 - `LayoutResult = { ok: true, lines: LaidLine[], width, height } | { ok: false, reason: 'too-long' | 'block-too-tall' }`
 - `LaidLine = { text, width, x, charOffsets: number[] }`（charOffsets はコードポイント単位の開始位置。文字幅の測定は共有のオフスクリーン Canvas の `measureText` で行う）
 - `missingMarks(layout: LayoutResult, missing: Set<string>): MissingMark[]` — `MissingMark = { lineIndex, x, width }`。結合文字の並びでは位置が近似になる場合がある（§5.2）

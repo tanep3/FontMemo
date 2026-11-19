@@ -15,7 +15,25 @@ import {
 
 export type { TextSegment };
 
+export type ParaAlign = "left" | "center" | "right";
+
 const BLOCK_TAGS = new Set(["DIV", "P", "LI", "BLOCKQUOTE"]);
+
+function isParaAlign(v: string | undefined): v is ParaAlign {
+  return v === "left" || v === "center" || v === "right";
+}
+
+/** Number of "\n" among the first cp code points of text. */
+function breaksBefore(text: string, cp: number): number {
+  let n = 0;
+  let seen = 0;
+  for (const ch of text) {
+    if (seen >= cp) break;
+    if (ch === "\n") n++;
+    seen++;
+  }
+  return n;
+}
 
 export class Editor {
   private root: HTMLElement;
@@ -141,6 +159,66 @@ export class Editor {
       this.walkNodes(nodes, {}, raw);
     });
     return mergeSegments(raw);
+  }
+
+  /**
+   * Alignment per layout paragraph (the text split on "\n"), parallel
+   * to how readSegments shapes the text: a block element's data-a
+   * covers every layout paragraph inside it (including <br> breaks);
+   * blocks without one yield undefined (the caller's default applies).
+   */
+  readAligns(): Array<ParaAlign | undefined> {
+    const aligns: Array<ParaAlign | undefined> = [];
+    this.paragraphNodes().forEach((nodes) => {
+      let align: ParaAlign | undefined;
+      if (
+        nodes.length === 1 &&
+        nodes[0].nodeType === Node.ELEMENT_NODE &&
+        BLOCK_TAGS.has((nodes[0] as HTMLElement).tagName)
+      ) {
+        const v = (nodes[0] as HTMLElement).dataset.a;
+        if (isParaAlign(v)) align = v;
+      }
+      aligns.push(align);
+      const count = (list: Node[]): void => {
+        for (const child of list) {
+          if (child.nodeType === Node.TEXT_NODE) {
+            for (const ch of child.textContent ?? "") {
+              if (ch === "\n") aligns.push(align);
+            }
+          } else if (child.nodeType === Node.ELEMENT_NODE) {
+            const el = child as HTMLElement;
+            if (el.tagName === "BR") aligns.push(align);
+            else count(Array.from(el.childNodes));
+          }
+        }
+      };
+      count(nodes);
+    });
+    return aligns;
+  }
+
+  /** The explicit alignment of the layout paragraph containing cp. */
+  alignAt(cp: number): ParaAlign | undefined {
+    return this.readAligns()[breaksBefore(this.plainText(), cp)];
+  }
+
+  /**
+   * Set the alignment of every layout paragraph the cp range touches
+   * (a collapsed range touches its own paragraph). Rebuilds the DOM in
+   * canonical form — one block per layout paragraph — like the other
+   * style operations.
+   */
+  applyAlignToRange(start: number, end: number, align: ParaAlign): void {
+    const segments = this.readSegments();
+    const aligns = this.readAligns();
+    const text = segments.map((s) => s.text).join("");
+    const first = breaksBefore(text, start);
+    const last = breaksBefore(text, end > start ? end - 1 : end);
+    for (let i = first; i <= last; i++) aligns[i] = align;
+    this.rewrite(segments, aligns);
+    this.setSelection(start, end);
+    this.emitChange();
   }
 
   plainText(): string {
@@ -273,7 +351,7 @@ export class Editor {
   // ---------- writing ----------
 
   /** Rebuild the editor DOM from segments (used on style operations). */
-  rewrite(segments: TextSegment[]): void {
+  rewrite(segments: TextSegment[], aligns?: ReadonlyArray<ParaAlign | undefined>): void {
     const merged = mergeSegments(segments);
     this.root.innerHTML = "";
     // Split into paragraphs, keeping each piece's style.
@@ -285,8 +363,13 @@ export class Editor {
         if (part) paragraphs[paragraphs.length - 1].push({ text: part, style: seg.style });
       });
     }
-    for (const para of paragraphs) {
+    for (const [paraIdx, para] of paragraphs.entries()) {
       const div = document.createElement("div");
+      const align = aligns?.[paraIdx];
+      if (align) {
+        div.dataset.a = align;
+        div.style.textAlign = align;
+      }
       if (para.length === 0) {
         div.appendChild(document.createElement("br"));
       } else {
