@@ -1,6 +1,7 @@
-// FontMemo app wiring (v0.2): WYSIWYG editor with per-range styles,
-// font families with real bold/italic faces, device fonts, and the
-// preview -> binarize -> save/share pipeline.
+// FontMemo app wiring: WYSIWYG editor with per-range styles, font
+// families with real bold/italic faces, device fonts. Since v0.5.0
+// the editor IS the preview (it displays the print layout scaled to
+// fit), and the PNG is generated on demand at save/share time.
 
 import { covers, type Coverage } from "../fonts/cmap";
 import {
@@ -36,7 +37,7 @@ import {
   type RunStyle,
   type TextSegment,
 } from "../core/runs";
-import { layoutText, missingMarks, type LayoutResult, type SegmentInput } from "../core/layout";
+import { layoutText, type SegmentInput } from "../core/layout";
 import { renderCanvas, rotate90CW } from "../core/render";
 import { binarizeCanvas } from "../core/binarize";
 import { platformCaps } from "../core/caps";
@@ -63,9 +64,13 @@ declare const __APP_VERSION__: string;
 type Settings = FontMemoSettings;
 
 const APP_VERSION = __APP_VERSION__;
-/** Fixed editor magnification: the editor draws at fontSize × this.
- * Deliberately not a setting (user's call) — display only. */
-const EDITOR_ZOOM = 1;
+/**
+ * Editor magnification: the editor displays the print layout scaled
+ * so the paper width fits the editor's width (zoom = editor width /
+ * paper width), recomputed on resize and paper changes. Display
+ * only, deliberately not a setting.
+ */
+let viewZoom = 1;
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -88,10 +93,6 @@ const clearStyleButton = $<HTMLButtonElement>("clearStyleButton");
 const warningBox = $<HTMLDivElement>("warningBox");
 const warningText = $<HTMLParagraphElement>("warningText");
 const missingText = $<HTMLParagraphElement>("missingText");
-const previewStack = $<HTMLDivElement>("previewStack");
-const previewCanvas = $<HTMLCanvasElement>("previewCanvas");
-const markCanvas = $<HTMLCanvasElement>("markCanvas");
-const previewEmpty = $<HTMLParagraphElement>("previewEmpty");
 const fontList = $<HTMLDivElement>("fontList");
 const specimen = $<HTMLDivElement>("specimen");
 const specimenName = $<HTMLSpanElement>("specimenName");
@@ -113,7 +114,9 @@ const creditsList = $<HTMLUListElement>("creditsList");
 const creditsClose = $<HTMLButtonElement>("creditsClose");
 
 let families: FontFamily[] = [];
-let currentBlob: Blob | null = null;
+/** True when the current text lays out within the caps (save/share on). */
+let docValid = false;
+let busy = false;
 let generation = 0;
 let debounceTimer: number | undefined;
 const measureCanvas = document.createElement("canvas");
@@ -242,15 +245,51 @@ function choiceHasItalic(choice: Choice): boolean {
 // ---------- editor decoration ----------
 
 function updateEditorBase(): void {
+  // The magnification follows the editor's width and the paper width.
+  const w = editorRoot.clientWidth;
+  if (w > 0) viewZoom = w / paperWidthOf(settings);
   const choice = baseChoice();
   const { face, spec } = resolveFace(choice, settings.bold, settings.italic);
   editorRoot.style.fontFamily = stackFor(choice);
   // Editor display size = print font size × view magnification.
-  editorRoot.style.fontSize = `${Math.round(settings.fontSize * EDITOR_ZOOM)}px`;
+  editorRoot.style.fontSize = `${Math.max(6, Math.round(settings.fontSize * viewZoom))}px`;
   editorRoot.style.fontWeight = String(spec.weight);
   editorRoot.style.fontStyle = spec.italic ? "italic" : "normal";
+  editorRoot.style.lineHeight = String(settings.lineHeight);
+  // Page geometry: the padding is the print margins × zoom, so the
+  // content box is exactly the print content width × zoom and lines
+  // wrap where the print layout wraps them.
+  editorRoot.style.padding = `${Math.round(settings.marginY * viewZoom)}px ${Math.round(settings.marginX * viewZoom)}px`;
+  if (settings.mode === "sideways") {
+    // No wrapping; the box is exactly the paper width tall (that is
+    // the print width after rotation). Long lines scroll sideways.
+    editorRoot.style.whiteSpace = "pre";
+    editorRoot.style.height = `${Math.round(paperWidthOf(settings) * viewZoom)}px`;
+    editorRoot.style.minHeight = "0";
+    editorRoot.style.overflow = "auto";
+  } else {
+    editorRoot.style.whiteSpace = "";
+    editorRoot.style.height = "";
+    editorRoot.style.minHeight = "";
+    editorRoot.style.overflow = "";
+  }
   void face.load().then(() => editor.redecorate());
 }
+
+/** Whether a span's text contains a glyph its face does not cover. */
+function spanHasMissing(text: string, style: RunStyle): boolean {
+  const choice = (style.fontRef ? resolveChoice(style.fontRef) : null) ?? baseChoice();
+  const { face } = resolveFace(choice, style.bold ?? settings.bold, style.italic ?? settings.italic);
+  if (!face.coverage) return false;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0) as number;
+    if (cp >= 0x20 && !(cp >= 0x7f && cp <= 0x9f) && !covers(face.coverage, cp)) return true;
+  }
+  return false;
+}
+
+/** Gate for missing-glyph decoration; null while nothing is missing. */
+let missingActive = false;
 
 editor.decorate = (span, style) => {
   const effChoice = style.fontRef ? (resolveChoice(style.fontRef) ?? baseChoice()) : baseChoice();
@@ -259,14 +298,20 @@ editor.decorate = (span, style) => {
   // Editor display = the range's print size × the view magnification,
   // so size differences stay visible proportionally while writing.
   span.style.fontSize = style.size
-    ? `${Math.round(style.size * EDITOR_ZOOM)}px`
+    ? `${Math.max(6, Math.round(style.size * viewZoom))}px`
     : "";
   span.style.fontWeight = String(spec.weight);
   span.style.fontStyle = spec.italic ? "italic" : "normal";
+  // Missing glyphs are marked in the editor itself (the print PNG
+  // never carries marks; it draws the fallback face instead).
+  const missing = missingActive && spanHasMissing(span.textContent ?? "", style);
+  span.style.textDecorationLine = missing ? "underline" : "";
+  span.style.textDecorationStyle = missing ? "wavy" : "";
+  span.style.textDecorationColor = missing ? "#d84040" : "";
   void face.load();
 };
 
-// ---------- preview pipeline ----------
+// ---------- validation / generation pipeline ----------
 
 interface ResolvedSeg {
   input: SegmentInput;
@@ -305,53 +350,52 @@ async function resolveSegments(segments: TextSegment[]): Promise<ResolvedSeg[]> 
 }
 
 function setGenerating(on: boolean): void {
+  busy = on;
   generatingLabel.hidden = !on;
   generatingLabel.textContent = on ? S.generating : "";
-  saveButton.disabled = on || currentBlob === null;
-  shareButton.disabled = on || currentBlob === null;
+  saveButton.disabled = on || !docValid;
+  shareButton.disabled = on || !docValid;
 }
 
-function clearPreview(message: string | null): void {
-  currentBlob = null;
-  previewStack.hidden = true;
-  previewEmpty.hidden = false;
-  previewEmpty.textContent = message ?? S.previewEmpty;
-  warningBox.hidden = true;
-  setGenerating(false);
+function layoutOptions() {
+  return {
+    lineHeightFactor: settings.lineHeight,
+    marginX: settings.marginX,
+    marginY: settings.marginY,
+    align: settings.align,
+    paragraphAligns: editor.readAligns(),
+    mode: settings.mode,
+    paperWidth: paperWidthOf(settings),
+    caps: platformCaps(),
+    baseSizePx: settings.fontSize,
+  };
 }
 
-async function regenerate(): Promise<void> {
+/**
+ * Validate the current text: layout within the caps, and which glyphs
+ * the chosen faces miss. The editor shows the layout itself, so this
+ * only drives warnings, in-editor missing marks, and whether the
+ * save/share buttons are live. The PNG is generated on demand.
+ */
+async function validate(): Promise<void> {
   const gen = ++generation;
   const segments = editor.readSegments();
   const text = segments.map((s) => s.text).join("");
   editorRoot.classList.toggle("is-empty", text.trim() === "");
   if (text.trim() === "") {
-    clearPreview(null);
+    docValid = false;
+    missingActive = false;
+    warningBox.hidden = true;
+    setGenerating(false);
     return;
   }
-  setGenerating(true);
   try {
     const resolved = await resolveSegments(segments);
     if (gen !== generation) return;
-
-    const paperWidth = paperWidthOf(settings);
-    const layout = layoutText(
-      resolved.map((r) => r.input),
-      {
-        lineHeightFactor: settings.lineHeight,
-        marginX: settings.marginX,
-        marginY: settings.marginY,
-        align: settings.align,
-        paragraphAligns: editor.readAligns(),
-        mode: settings.mode,
-        paperWidth,
-        caps: platformCaps(),
-        baseSizePx: settings.fontSize,
-      },
-    );
+    const layout = layoutText(resolved.map((r) => r.input), layoutOptions());
     if (gen !== generation) return;
     if (!layout.ok) {
-      clearPreview(null);
+      docValid = false;
       warningText.textContent = layout.reason === "block-too-tall" ? S.warnBlockTall : S.warnTooLong;
       warningBox.hidden = false;
       missingText.hidden = true;
@@ -360,28 +404,18 @@ async function regenerate(): Promise<void> {
     }
 
     // Missing glyphs, judged per segment face.
-    const missingCp = new Set<number>();
     const missingCharsList: string[] = [];
     for (const r of resolved) {
       if (!r.coverage) continue;
-      let idx = r.cpStart;
       for (const ch of r.input.text) {
         const cp = ch.codePointAt(0) as number;
         if (cp >= 0x20 && !(cp >= 0x7f && cp <= 0x9f) && !covers(r.coverage, cp)) {
-          missingCp.add(idx);
           if (!missingCharsList.includes(ch)) missingCharsList.push(ch);
         }
-        idx++;
       }
     }
 
-    let canvas = renderCanvas(layout);
-    if (settings.mode === "sideways") canvas = rotate90CW(canvas);
-    const finalCanvas = binarizeCanvas(canvas);
-    drawPreview(finalCanvas, layout, missingCp);
-    currentBlob = await new Promise<Blob | null>((resolve) => finalCanvas.toBlob(resolve, "image/png"));
-    if (gen !== generation) return;
-
+    docValid = true;
     if (missingCharsList.length > 0) {
       warningText.textContent = S.warnMissing(missingCharsList.join(" "));
       missingText.hidden = true;
@@ -389,10 +423,11 @@ async function regenerate(): Promise<void> {
     } else {
       warningBox.hidden = true;
     }
+    refreshMissingMarks(missingCharsList.length > 0);
     setGenerating(false);
   } catch {
     if (gen !== generation) return;
-    clearPreview(null);
+    docValid = false;
     warningText.textContent = S.warnGenFailed;
     warningBox.hidden = false;
     missingText.hidden = true;
@@ -400,46 +435,38 @@ async function regenerate(): Promise<void> {
   }
 }
 
-function drawPreview(
-  finalCanvas: HTMLCanvasElement,
-  layout: Extract<LayoutResult, { ok: true }>,
-  missingCp: ReadonlySet<number>,
-): void {
-  const pctx = previewCanvas.getContext("2d");
-  if (!pctx) return;
-  previewCanvas.width = finalCanvas.width;
-  previewCanvas.height = finalCanvas.height;
-  pctx.drawImage(finalCanvas, 0, 0);
-  previewStack.hidden = false;
-  previewEmpty.hidden = true;
-
-  const marks = missingMarks(layout, missingCp);
-  if (marks.length === 0) {
-    markCanvas.hidden = true;
-    return;
+/**
+ * Apply missing-glyph marks inside the editor. Marks live on spans;
+ * text typed or pasted outside spans is canonicalized once (the same
+ * rewrite the style operations use), never during IME composition.
+ */
+function refreshMissingMarks(hasMissing: boolean): void {
+  missingActive = hasMissing;
+  if (hasMissing && !editor.isComposing && editor.hasBareText()) {
+    const range = editor.selectionRange();
+    applyingStyle = true;
+    editor.rewrite(editor.readSegments(), editor.readAligns());
+    applyingStyle = false;
+    if (range) editor.setSelection(range.start, range.end);
   }
-  markCanvas.width = layout.finalWidth;
-  markCanvas.height = layout.finalHeight;
-  const mctx = markCanvas.getContext("2d");
-  if (!mctx) return;
-  mctx.clearRect(0, 0, markCanvas.width, markCanvas.height);
-  mctx.fillStyle = "rgba(217, 64, 64, 0.55)";
-  const sideways = settings.mode === "sideways";
-  for (const mark of marks) {
-    if (sideways) {
-      const dx = layout.height - (mark.y + 3);
-      const dy = mark.x;
-      mctx.fillRect(dx, dy, 3, mark.width);
-    } else {
-      mctx.fillRect(mark.x, mark.y, mark.width, 3);
-    }
-  }
-  markCanvas.hidden = false;
+  editor.redecorate();
 }
 
-function scheduleRegenerate(): void {
+/** Render the print PNG at full resolution (save/share time). */
+async function generatePngBlob(): Promise<Blob | null> {
+  const segments = editor.readSegments();
+  const resolved = await resolveSegments(segments);
+  const layout = layoutText(resolved.map((r) => r.input), layoutOptions());
+  if (!layout.ok) return null;
+  let canvas = renderCanvas(layout);
+  if (settings.mode === "sideways") canvas = rotate90CW(canvas);
+  const finalCanvas = binarizeCanvas(canvas);
+  return new Promise<Blob | null>((resolve) => finalCanvas.toBlob(resolve, "image/png"));
+}
+
+function scheduleValidate(): void {
   window.clearTimeout(debounceTimer);
-  debounceTimer = window.setTimeout(() => void regenerate(), 250);
+  debounceTimer = window.setTimeout(() => void validate(), 250);
 }
 
 // ---------- style bar ----------
@@ -561,7 +588,7 @@ styleScaleRange.addEventListener("change", () => {
     settings.fontSize = Math.max(16, Math.min(96, Math.round(value)));
     saveSettings(settings);
     updateEditorBase();
-    void regenerate();
+    void validate();
   }
   refreshStyleBar();
 });
@@ -577,7 +604,7 @@ function toggleBaseOrRange(kind: "bold" | "italic"): void {
     settings[kind] = !settings[kind];
     saveSettings(settings);
     updateEditorBase();
-    void regenerate();
+    void validate();
     refreshStyleBar();
   }
 }
@@ -593,7 +620,7 @@ clearStyleButton.addEventListener("click", () => {
     settings.fontSize = 40;
     saveSettings(settings);
     updateEditorBase();
-    void regenerate();
+    void validate();
     refreshStyleBar();
   }
 });
@@ -609,7 +636,7 @@ for (const b of alignButtons) {
     } else {
       settings.align = value;
       saveSettings(settings);
-      void regenerate();
+      void validate();
     }
     paintAlignSeg();
   });
@@ -633,7 +660,7 @@ document.addEventListener("selectionchange", () => {
 
 editor.onChange(() => {
   if (!applyingStyle) savedRange = null;
-  scheduleRegenerate();
+  scheduleValidate();
   refreshStyleBar();
 });
 
@@ -738,7 +765,7 @@ async function selectChoice(ref: string): Promise<void> {
   renderFontList();
   renderStyleFontOptions();
   refreshStyleBar();
-  await regenerate();
+  await validate();
 }
 
 deleteFontButton.addEventListener("click", async () => {
@@ -763,7 +790,7 @@ deleteFontButton.addEventListener("click", async () => {
   renderFontList();
   renderStyleFontOptions();
   refreshStyleBar();
-  await regenerate();
+  await validate();
 });
 
 // ---------- import ----------
@@ -858,7 +885,8 @@ function bindRange(
     set(v);
     out.textContent = format(v);
     saveSettings(settings);
-    scheduleRegenerate();
+    updateEditorBase();
+    scheduleValidate();
   });
 }
 
@@ -873,7 +901,8 @@ function bindSeg(id: string, get: () => string, set: (v: string) => void): void 
       set(b.dataset.value as string);
       saveSettings(settings);
       paint();
-      void regenerate();
+      updateEditorBase();
+      void validate();
     });
   }
   paint();
@@ -902,39 +931,52 @@ function initSettingsControls(): void {
       else settings.widthPreset = Number(b.dataset.value) as Settings["widthPreset"];
       saveSettings(settings);
       paintWidth();
-      void regenerate();
+      updateEditorBase();
+      void validate();
     });
   }
   customInput.addEventListener("input", () => {
     const v = Math.max(100, Math.min(2000, Number(customInput.value) || 384));
     settings.customWidth = v;
     saveSettings(settings);
-    scheduleRegenerate();
+    updateEditorBase();
+    scheduleValidate();
   });
   paintWidth();
 }
 
 // ---------- save / share ----------
 
-saveButton.addEventListener("click", () => {
-  if (!currentBlob) return;
-  savePng(currentBlob, nextSaveName());
+saveButton.addEventListener("click", async () => {
+  if (!docValid || busy) return;
+  setGenerating(true);
+  try {
+    const blob = await generatePngBlob();
+    if (blob) savePng(blob, nextSaveName());
+  } catch {
+    warningText.textContent = S.warnGenFailed;
+    warningBox.hidden = false;
+  }
+  setGenerating(false);
 });
 shareButton.addEventListener("click", async () => {
-  if (!currentBlob) return;
+  if (!docValid || busy) return;
   const name = nextSaveName();
+  if (!canSharePng(name)) {
+    warningText.textContent = S.shareUnsupported;
+    warningBox.hidden = false;
+    return;
+  }
+  setGenerating(true);
   try {
-    if (canSharePng(name)) {
-      await sharePng(currentBlob, name);
-    } else {
-      warningText.textContent = S.shareUnsupported;
-      warningBox.hidden = false;
-    }
+    const blob = await generatePngBlob();
+    if (blob) await sharePng(blob, name);
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") return;
     warningText.textContent = S.shareUnsupported;
     warningBox.hidden = false;
   }
+  setGenerating(false);
 });
 
 // ---------- i18n / credits ----------
@@ -970,7 +1012,7 @@ langButton.addEventListener("click", async () => {
   renderFontList();
   renderStyleFontOptions();
   refreshStyleBar();
-  await regenerate();
+  await validate();
 });
 
 creditsButton.addEventListener("click", () => creditsDialog.showModal());
@@ -997,7 +1039,9 @@ async function init(): Promise<void> {
   renderStyleFontOptions();
   initSettingsControls();
   refreshStyleBar();
-  clearPreview(null);
+  setGenerating(false);
+  // Keep the magnification honest when the window turns or resizes.
+  new ResizeObserver(() => updateEditorBase()).observe(editorRoot);
 }
 
 void init();

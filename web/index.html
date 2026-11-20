@@ -60,6 +60,15 @@
           aria-multiline="true"
           spellcheck="false"
         ></div>
+        <div class="warning" id="warningBox" hidden>
+          <p id="warningText"></p>
+          <p class="missing" id="missingText" hidden></p>
+        </div>
+        <div class="action-row">
+          <button type="button" class="primary-button" id="saveButton" data-i18n="save"></button>
+          <button type="button" class="secondary-button" id="shareButton" data-i18n="share"></button>
+          <span class="generating" id="generatingLabel" hidden></span>
+        </div>
       </section>
 
 
@@ -101,25 +110,6 @@
             <button type="button" data-value="sideways" data-i18n="modeSideways"></button>
           </div>
         </div>
-      </section>
-
-      <div class="warning" id="warningBox" hidden>
-        <p id="warningText"></p>
-        <p class="missing" id="missingText" hidden></p>
-      </div>
-
-      <section class="card">
-        <h2 class="card-label" data-i18n="previewLabel"></h2>
-        <div class="preview-stack" id="previewStack" hidden>
-          <canvas id="previewCanvas"></canvas>
-          <canvas id="markCanvas" class="mark-layer" hidden></canvas>
-        </div>
-        <p class="preview-empty" id="previewEmpty" data-i18n="previewEmpty"></p>
-        <div class="action-row">
-                <button type="button" class="primary-button" id="saveButton" data-i18n="save"></button>
-                <button type="button" class="secondary-button" id="shareButton" data-i18n="share"></button>
-                <span class="generating" id="generatingLabel" hidden></span>
-              </div>
       </section>
 
       <section class="card" id="fontCard">

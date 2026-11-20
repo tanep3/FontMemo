@@ -238,6 +238,27 @@ export class Editor {
     });
   }
 
+  /** True when some visible text sits outside any span (fresh typing
+   *  or a paste that no style operation has canonicalized yet). */
+  hasBareText(): boolean {
+    const walker = document.createTreeWalker(this.root, NodeFilter.SHOW_TEXT);
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      if ((node.textContent ?? "").trim() === "") continue;
+      let p: Node | null = node.parentNode;
+      let inSpan = false;
+      while (p && p !== this.root) {
+        if ((p as HTMLElement).tagName === "SPAN") {
+          inSpan = true;
+          break;
+        }
+        p = p.parentNode;
+      }
+      if (!inSpan) return true;
+    }
+    return false;
+  }
+
   // ---------- selection mapping (code-point offsets) ----------
 
   /** Text nodes in document order with the cp offset where each starts. */
@@ -373,16 +394,14 @@ export class Editor {
       if (para.length === 0) {
         div.appendChild(document.createElement("br"));
       } else {
+        // Every run lives in a span (even an unstyled one) so display
+        // decoration — e.g. missing-glyph marks — can reach all text.
         for (const seg of para) {
-          if (Object.keys(seg.style).length === 0) {
-            div.appendChild(document.createTextNode(seg.text));
-          } else {
-            const span = document.createElement("span");
-            span.textContent = seg.text;
-            this.writeDataset(span, seg.style);
-            this.decorate(span, seg.style);
-            div.appendChild(span);
-          }
+          const span = document.createElement("span");
+          span.textContent = seg.text;
+          this.writeDataset(span, seg.style);
+          this.decorate(span, seg.style);
+          div.appendChild(span);
         }
       }
       this.root.appendChild(div);
