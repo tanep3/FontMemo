@@ -628,3 +628,10 @@ dialog p {
   margin-right: 12px;
   font-size: 12px;
 }
+
+.credit {
+  margin: 20px 0 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
