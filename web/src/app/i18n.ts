@@ -34,6 +34,7 @@ export interface Strings {
   modeSideways: string;
   previewLabel: string;
   previewEmpty: string;
+  guideNote: string;
   shareUnsupported: string;
   save: string;
   share: string;
@@ -108,6 +109,7 @@ const ja: Strings = {
   modeSideways: "横印刷",
   previewLabel: "プレビュー",
   previewEmpty: "文章を入力するとプレビューが出ます",
+  guideNote: "点線は用紙を横にしたときの長さの目印です（青＝A版、赤＝B版）。印刷には入りません",
   shareUnsupported: "このブラウザでは共有できないので、PNG保存を使ってください",
   save: "保存",
   share: "共有",
@@ -184,6 +186,7 @@ const en: Strings = {
   modeSideways: "Sideways",
   previewLabel: "Preview",
   previewEmpty: "Your preview appears here",
+  guideNote: "Dashed lines mark each paper size's landscape length (blue = A series, red = B series). They are not printed.",
   shareUnsupported: "This browser cannot share; please use Save PNG instead",
   save: "Save",
   share: "Share",

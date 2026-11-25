@@ -52,14 +52,18 @@
 
       <section class="card">
         <h2 class="card-label" data-i18n="textLabel"></h2>
-        <div
-          id="editor"
-          class="editor is-empty"
-          contenteditable="true"
-          role="textbox"
-          aria-multiline="true"
-          spellcheck="false"
-        ></div>
+        <div class="editor-wrap">
+          <div
+            id="editor"
+            class="editor is-empty"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            spellcheck="false"
+          ></div>
+          <div class="guide-overlay" id="guideOverlay" hidden></div>
+        </div>
+        <p class="note" id="guideNote" data-i18n="guideNote" hidden></p>
         <div class="warning" id="warningBox" hidden>
           <p id="warningText"></p>
           <p class="missing" id="missingText" hidden></p>

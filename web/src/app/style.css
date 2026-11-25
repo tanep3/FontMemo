@@ -22,16 +22,27 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Stop Android Chrome / Xiaomi HyperOS font boosting and system
+     text scaling from inflating small text blocks on some devices
+     (seen on POCO F4 GT: the header crushed to one character per
+     line). The app sizes its own text. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .topbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 12px 16px;
   max-width: 600px;
@@ -40,10 +51,15 @@ body {
 
 .app-icon {
   border-radius: 10px;
+  flex: none;
 }
 
 .title-block {
-  flex: 1;
+  /* A floor on the basis keeps the block from being crushed to a
+     single character wide when the row runs out of room (narrow
+     viewport, enlarged system fonts): the chips wrap to the next
+     line instead. */
+  flex: 1 1 150px;
   min-width: 0;
 }
 
@@ -62,6 +78,7 @@ body {
 .version {
   font-size: 11px;
   color: var(--muted);
+  flex: none;
 }
 
 .chip-button {
@@ -72,6 +89,8 @@ body {
   padding: 6px 12px;
   font-size: 12px;
   cursor: pointer;
+  flex: none;
+  white-space: nowrap;
 }
 
 .column {
@@ -98,6 +117,51 @@ body {
   color: var(--muted);
   margin: 0 0 10px;
   letter-spacing: 0.06em;
+}
+
+.editor-wrap {
+  position: relative;
+}
+
+/* Sideways paper-size guides: dashed lines over the editor at each
+   A/B landscape length. Display only — never in the print PNG. */
+.guide-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: 12px;
+}
+
+.guide-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px dashed;
+}
+
+.guide-line .guide-label {
+  position: absolute;
+  top: 4px;
+  left: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.guide-line.series-a {
+  border-color: rgba(47, 93, 163, 0.7);
+  color: #2f5da3;
+}
+
+.guide-line.series-b {
+  border-color: rgba(192, 69, 62, 0.75);
+  color: #c0453e;
 }
 
 .editor {
@@ -278,6 +342,7 @@ body {
 }
 
 .toggle-button {
+  flex: none;
   width: 46px;
   height: 40px;
   border: 2px solid var(--line);
@@ -408,6 +473,8 @@ body {
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
+  flex: none;
+  white-space: nowrap;
 }
 
 .note {
@@ -550,6 +617,7 @@ body {
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .primary-button:disabled {
@@ -567,6 +635,7 @@ body {
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .secondary-button:disabled {

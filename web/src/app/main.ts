@@ -38,6 +38,7 @@ import {
   type TextSegment,
 } from "../core/runs";
 import { layoutText, type SegmentInput } from "../core/layout";
+import { PAPER_GUIDES_YOKO, guideLengthPx } from "../core/guides";
 import { renderCanvas, rotate90CW } from "../core/render";
 import { binarizeCanvas } from "../core/binarize";
 import { platformCaps } from "../core/caps";
@@ -83,6 +84,37 @@ let S: Strings = strings(settings.lang);
 
 const editorRoot = $<HTMLDivElement>("editor");
 const editor = new Editor(editorRoot);
+const guideOverlay = $<HTMLDivElement>("guideOverlay");
+const guideNote = $<HTMLParagraphElement>("guideNote");
+
+// Sideways paper-size guides (display only): one dashed line per
+// A/B landscape size, positioned from the print start edge. The
+// overlay sits over the editor and the lines are repositioned on
+// scroll, because the editor scrolls its content underneath it.
+const guideLineEls: HTMLDivElement[] = PAPER_GUIDES_YOKO.map((g) => {
+  const line = document.createElement("div");
+  line.className = `guide-line series-${g.series === "A" ? "a" : "b"}`;
+  const label = document.createElement("span");
+  label.className = "guide-label";
+  label.textContent = g.label;
+  line.appendChild(label);
+  guideOverlay.appendChild(line);
+  return line;
+});
+
+function refreshGuides(): void {
+  const sideways = settings.mode === "sideways";
+  guideOverlay.hidden = !sideways;
+  guideNote.hidden = !sideways;
+  if (!sideways) return;
+  const paperWidth = paperWidthOf(settings);
+  PAPER_GUIDES_YOKO.forEach((g, i) => {
+    const x = guideLengthPx(g.longSideMm, paperWidth) * viewZoom - editorRoot.scrollLeft;
+    guideLineEls[i].style.left = `${Math.round(x)}px`;
+  });
+}
+
+editorRoot.addEventListener("scroll", refreshGuides);
 const styleFontSelect = $<HTMLSelectElement>("styleFontSelect");
 const styleScaleRange = $<HTMLInputElement>("styleScaleRange");
 const styleScaleOut = $<HTMLOutputElement>("styleScaleOut");
@@ -273,6 +305,7 @@ function updateEditorBase(): void {
     editorRoot.style.minHeight = "";
     editorRoot.style.overflow = "";
   }
+  refreshGuides();
   void face.load().then(() => editor.redecorate());
 }
 

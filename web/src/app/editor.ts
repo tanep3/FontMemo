@@ -19,6 +19,25 @@ export type ParaAlign = "left" | "center" | "right";
 
 const BLOCK_TAGS = new Set(["DIV", "P", "LI", "BLOCKQUOTE"]);
 
+function isBr(node: Node): boolean {
+  return node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName === "BR";
+}
+
+/**
+ * The children of a block, minus ONE trailing <br>. Browsers keep a
+ * placeholder <br> at the end of every block line — an empty line is
+ * <div><br></div>, and Android Chrome often leaves <div>text<br></div>
+ * too. That <br> gives the block its height; it is NOT a line break.
+ * Reading it as "\n" made every style operation (which rewrites the
+ * DOM from the read segments) grow one extra blank line per empty
+ * paragraph. Two trailing <br>s mean one real break plus the
+ * placeholder, so exactly one is dropped.
+ */
+function dropPlaceholderBr(nodes: Node[]): Node[] {
+  if (nodes.length > 0 && isBr(nodes[nodes.length - 1])) return nodes.slice(0, -1);
+  return nodes;
+}
+
 function isParaAlign(v: string | undefined): v is ParaAlign {
   return v === "left" || v === "center" || v === "right";
 }
@@ -133,8 +152,14 @@ export class Editor {
     return paragraphs.length > 0 ? paragraphs : [[]];
   }
 
-  private walkNodes(nodes: Node[], style: RunStyle, out: TextSegment[]): void {
-    for (const child of nodes) {
+  private walkNodes(
+    nodes: Node[],
+    style: RunStyle,
+    out: TextSegment[],
+    blockContent = false,
+  ): void {
+    const list = blockContent ? dropPlaceholderBr(nodes) : nodes;
+    for (const child of list) {
       if (child.nodeType === Node.TEXT_NODE) {
         const text = child.textContent ?? "";
         if (text) out.push({ text, style });
@@ -145,7 +170,7 @@ export class Editor {
         } else if (el.tagName === "SPAN") {
           this.walkNodes(Array.from(el.childNodes), { ...style, ...this.styleOf(el) }, out);
         } else {
-          this.walkNodes(Array.from(el.childNodes), style, out);
+          this.walkNodes(Array.from(el.childNodes), style, out, BLOCK_TAGS.has(el.tagName));
         }
       }
     }
@@ -156,7 +181,7 @@ export class Editor {
     const raw: TextSegment[] = [];
     this.paragraphNodes().forEach((nodes, idx) => {
       if (idx > 0) raw.push({ text: "\n", style: {} });
-      this.walkNodes(nodes, {}, raw);
+      this.walkNodes(nodes, {}, raw, true);
     });
     return mergeSegments(raw);
   }
@@ -180,8 +205,11 @@ export class Editor {
         if (isParaAlign(v)) align = v;
       }
       aligns.push(align);
-      const count = (list: Node[]): void => {
-        for (const child of list) {
+      const count = (list: Node[], blockContent = false): void => {
+        // Same placeholder-<br> rule as readSegments, so the align
+        // list stays parallel to the text's paragraphs.
+        const effective = blockContent ? dropPlaceholderBr(list) : list;
+        for (const child of effective) {
           if (child.nodeType === Node.TEXT_NODE) {
             for (const ch of child.textContent ?? "") {
               if (ch === "\n") aligns.push(align);
@@ -189,11 +217,11 @@ export class Editor {
           } else if (child.nodeType === Node.ELEMENT_NODE) {
             const el = child as HTMLElement;
             if (el.tagName === "BR") aligns.push(align);
-            else count(Array.from(el.childNodes));
+            else count(Array.from(el.childNodes), BLOCK_TAGS.has(el.tagName));
           }
         }
       };
-      count(nodes);
+      count(nodes, true);
     });
     return aligns;
   }
@@ -267,19 +295,20 @@ export class Editor {
     let cp = 0;
     this.paragraphNodes().forEach((nodes, idx) => {
       if (idx > 0) cp += 1; // the paragraph break
-      const walk = (list: Node[]): void => {
-        for (const child of list) {
+      const walk = (list: Node[], blockContent = false): void => {
+        const effective = blockContent ? dropPlaceholderBr(list) : list;
+        for (const child of effective) {
           if (child.nodeType === Node.TEXT_NODE) {
             table.push({ node: child as Text, startCp: cp });
             cp += cpLength(child.textContent ?? "");
           } else if (child.nodeType === Node.ELEMENT_NODE) {
             const el = child as HTMLElement;
             if (el.tagName === "BR") cp += 1;
-            else walk(Array.from(el.childNodes));
+            else walk(Array.from(el.childNodes), BLOCK_TAGS.has(el.tagName));
           }
         }
       };
-      walk(nodes);
+      walk(nodes, true);
     });
     return table;
   }
