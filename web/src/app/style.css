@@ -135,16 +135,24 @@ body {
 
 .guide-line {
   position: absolute;
+}
+
+.guide-line.orient-v {
   top: 0;
   bottom: 0;
   width: 0;
   border-left: 2px dashed;
 }
 
+.guide-line.orient-h {
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px dashed;
+}
+
 .guide-line .guide-label {
   position: absolute;
-  top: 4px;
-  left: 3px;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
@@ -152,6 +160,16 @@ body {
   background: rgba(255, 255, 255, 0.85);
   border-radius: 4px;
   padding: 1px 4px;
+}
+
+.guide-line.orient-v .guide-label {
+  top: 4px;
+  left: 3px;
+}
+
+.guide-line.orient-h .guide-label {
+  top: 3px;
+  left: 4px;
 }
 
 .guide-line.series-a {
@@ -162,6 +180,16 @@ body {
 .guide-line.series-b {
   border-color: rgba(192, 69, 62, 0.75);
   color: #c0453e;
+}
+
+.guide-line.series-paper {
+  border-color: rgba(46, 139, 87, 0.8);
+  color: #2e8b57;
+}
+
+.guide-line .guide-label-end {
+  left: auto;
+  right: 4px;
 }
 
 .editor {

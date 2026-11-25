@@ -38,7 +38,7 @@ import {
   type TextSegment,
 } from "../core/runs";
 import { layoutText, type SegmentInput } from "../core/layout";
-import { PAPER_GUIDES_YOKO, guideLengthPx } from "../core/guides";
+import { PAPER_SIZES, guideLengthPx, printBandPx } from "../core/guides";
 import { renderCanvas, rotate90CW } from "../core/render";
 import { binarizeCanvas } from "../core/binarize";
 import { platformCaps } from "../core/caps";
@@ -87,11 +87,14 @@ const editor = new Editor(editorRoot);
 const guideOverlay = $<HTMLDivElement>("guideOverlay");
 const guideNote = $<HTMLParagraphElement>("guideNote");
 
-// Sideways paper-size guides (display only): one dashed line per
-// A/B landscape size, positioned from the print start edge. The
-// overlay sits over the editor and the lines are repositioned on
-// scroll, because the editor scrolls its content underneath it.
-const guideLineEls: HTMLDivElement[] = PAPER_GUIDES_YOKO.map((g) => {
+// Paper-size guides (display only): one dashed line per A/B size
+// along the print-length axis, measured from the print start edge.
+// Normal mode uses each sheet's vertical side (縦) as horizontal
+// lines; sideways mode uses the horizontal side (横) as vertical
+// lines. The overlay sits over the editor and the lines are
+// repositioned on scroll, because in sideways mode the editor
+// scrolls its content underneath it.
+const guideLineEls: HTMLDivElement[] = PAPER_SIZES.map((g) => {
   const line = document.createElement("div");
   line.className = `guide-line series-${g.series === "A" ? "a" : "b"}`;
   const label = document.createElement("span");
@@ -102,15 +105,46 @@ const guideLineEls: HTMLDivElement[] = PAPER_GUIDES_YOKO.map((g) => {
   return line;
 });
 
+// Sideways only: the print-area band across the 48mm printable
+// width, as two green horizontal dashed lines at the top/bottom
+// margin edges. The lines move when the margin setting changes.
+const bandLineEls: HTMLDivElement[] = [0, 1].map((idx) => {
+  const line = document.createElement("div");
+  line.className = "guide-line orient-h series-paper";
+  if (idx === 0) {
+    const label = document.createElement("span");
+    label.className = "guide-label guide-label-end";
+    label.dataset.i18n = "guidePrintBand";
+    line.appendChild(label);
+  }
+  guideOverlay.appendChild(line);
+  return line;
+});
+
 function refreshGuides(): void {
-  const sideways = settings.mode === "sideways";
-  guideOverlay.hidden = !sideways;
-  guideNote.hidden = !sideways;
-  if (!sideways) return;
+  guideOverlay.hidden = false;
+  guideNote.hidden = false;
   const paperWidth = paperWidthOf(settings);
-  PAPER_GUIDES_YOKO.forEach((g, i) => {
-    const x = guideLengthPx(g.longSideMm, paperWidth) * viewZoom - editorRoot.scrollLeft;
-    guideLineEls[i].style.left = `${Math.round(x)}px`;
+  const sideways = settings.mode === "sideways";
+  PAPER_SIZES.forEach((g, i) => {
+    const el = guideLineEls[i];
+    el.classList.toggle("orient-v", sideways);
+    el.classList.toggle("orient-h", !sideways);
+    if (sideways) {
+      const x = guideLengthPx(g.widthMm, paperWidth) * viewZoom - editorRoot.scrollLeft;
+      el.style.left = `${Math.round(x)}px`;
+      el.style.top = "";
+    } else {
+      const y = guideLengthPx(g.heightMm, paperWidth) * viewZoom - editorRoot.scrollTop;
+      el.style.top = `${Math.round(y)}px`;
+      el.style.left = "";
+    }
+  });
+  const band = printBandPx(paperWidth, settings.marginY);
+  [band.startPx, band.endPx].forEach((pos, i) => {
+    const el = bandLineEls[i];
+    el.style.display = sideways ? "" : "none";
+    if (sideways) el.style.top = `${Math.round(pos * viewZoom - editorRoot.scrollTop)}px`;
   });
 }
 

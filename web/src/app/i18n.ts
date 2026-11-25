@@ -35,6 +35,7 @@ export interface Strings {
   previewLabel: string;
   previewEmpty: string;
   guideNote: string;
+  guidePrintBand: string;
   shareUnsupported: string;
   save: string;
   share: string;
@@ -109,7 +110,8 @@ const ja: Strings = {
   modeSideways: "横印刷",
   previewLabel: "プレビュー",
   previewEmpty: "文章を入力するとプレビューが出ます",
-  guideNote: "点線は用紙を横にしたときの長さの目印です（青＝A版、赤＝B版）。印刷には入りません",
+  guideNote: "点線はノート各版の長さの目印です（通常印刷＝縦の長さ、横印刷＝横の長さ／青＝A版、赤＝B版）。横印刷の緑の点線は印字範囲（上下マージンの内側）です。印刷には入りません",
+  guidePrintBand: "印字範囲",
   shareUnsupported: "このブラウザでは共有できないので、PNG保存を使ってください",
   save: "保存",
   share: "共有",
@@ -186,7 +188,8 @@ const en: Strings = {
   modeSideways: "Sideways",
   previewLabel: "Preview",
   previewEmpty: "Your preview appears here",
-  guideNote: "Dashed lines mark each paper size's landscape length (blue = A series, red = B series). They are not printed.",
+  guideNote: "Dashed lines mark each paper size's length (normal print: the vertical side; sideways print: the horizontal side; blue = A series, red = B series). In sideways print, the green dashed lines mark the print area (inside the top/bottom margins). They are not printed.",
+  guidePrintBand: "Print area",
   shareUnsupported: "This browser cannot share; please use Save PNG instead",
   save: "Save",
   share: "Share",

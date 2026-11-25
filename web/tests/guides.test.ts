@@ -1,17 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PAPER_GUIDES_YOKO, dotsPerMmForWidth, guideLengthPx } from "../src/core/guides";
+import { PAPER_SIZES, dotsPerMmForWidth, guideLengthPx, printBandPx } from "../src/core/guides";
 
-test("yoko long sides: A and B series, ascending", () => {
+test("paper sizes: A and B series with portrait width/height", () => {
   assert.deepEqual(
-    PAPER_GUIDES_YOKO.map((g) => [g.label, g.series, g.longSideMm]),
+    PAPER_SIZES.map((g) => [g.label, g.series, g.widthMm, g.heightMm]),
     [
-      ["A6", "A", 148],
-      ["B6", "B", 182],
-      ["A5", "A", 210],
-      ["B5", "B", 257],
-      ["A4", "A", 297],
-      ["B4", "B", 364],
+      ["A6", "A", 105, 148],
+      ["B6", "B", 128, 182],
+      ["A5", "A", 148, 210],
+      ["B5", "B", 182, 257],
+      ["A4", "A", 210, 297],
+      ["B4", "B", 257, 364],
     ],
   );
 });
@@ -21,6 +21,13 @@ test("dots per mm follows the width preset's printer class", () => {
   assert.ok(Math.abs(dotsPerMmForWidth(576) - 300 / 25.4) < 1e-9);
   assert.ok(Math.abs(dotsPerMmForWidth(250) - 200 / 25.4) < 1e-9);
   assert.ok(Math.abs(dotsPerMmForWidth(1000) - 300 / 25.4) < 1e-9);
+});
+
+test("print band is the paper width minus both margins", () => {
+  assert.deepEqual(printBandPx(384, 16), { startPx: 16, endPx: 368 });
+  assert.deepEqual(printBandPx(576, 0), { startPx: 0, endPx: 576 });
+  // An over-large margin never inverts the band.
+  assert.deepEqual(printBandPx(384, 300), { startPx: 300, endPx: 300 });
 });
 
 test("guide lengths scale with resolution for the same physical size", () => {
