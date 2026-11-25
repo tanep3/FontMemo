@@ -38,7 +38,7 @@ import {
   type TextSegment,
 } from "../core/runs";
 import { layoutText, type SegmentInput } from "../core/layout";
-import { PAPER_SIZES, guideLengthPx, printBandPx } from "../core/guides";
+import { GUIDE_MARKS, guideLengthPx, printBandPx } from "../core/guides";
 import { renderCanvas, rotate90CW } from "../core/render";
 import { binarizeCanvas } from "../core/binarize";
 import { platformCaps } from "../core/caps";
@@ -87,30 +87,32 @@ const editor = new Editor(editorRoot);
 const guideOverlay = $<HTMLDivElement>("guideOverlay");
 const guideNote = $<HTMLParagraphElement>("guideNote");
 
-// Paper-size guides (display only): one dashed line per A/B size
-// along the print-length axis, measured from the print start edge.
-// Normal mode uses each sheet's vertical side (縦) as horizontal
-// lines; sideways mode uses the horizontal side (横) as vertical
-// lines. The overlay sits over the editor and the lines are
-// repositioned on scroll, because in sideways mode the editor
-// scrolls its content underneath it.
-const guideLineEls: HTMLDivElement[] = PAPER_SIZES.map((g) => {
+// Paper-size guides (display only): dashed lines along the
+// print-length axis at every A/B sheet side — both the horizontal
+// (横) and the vertical (縦) lengths, in both modes (horizontal
+// lines in normal mode, vertical lines in sideways mode), measured
+// from the print start edge. The overlay sits over the editor and
+// the lines are repositioned on scroll, because in sideways mode
+// the editor scrolls its content underneath it.
+const guideLineEls: HTMLDivElement[] = GUIDE_MARKS.map((g) => {
   const line = document.createElement("div");
   line.className = `guide-line series-${g.series === "A" ? "a" : "b"}`;
   const label = document.createElement("span");
   label.className = "guide-label";
-  label.textContent = g.label;
+  label.textContent = g.text;
   line.appendChild(label);
   guideOverlay.appendChild(line);
   return line;
 });
 
-// Sideways only: the print-area band across the 48mm printable
-// width, as two green horizontal dashed lines at the top/bottom
-// margin edges. The lines move when the margin setting changes.
+// The print-area band across the 48mm printable width, as two
+// green dashed lines at the margin edges — horizontal lines in
+// sideways mode (top/bottom margins), vertical lines in normal
+// mode (left/right margins). The lines move when the margin
+// settings change.
 const bandLineEls: HTMLDivElement[] = [0, 1].map((idx) => {
   const line = document.createElement("div");
-  line.className = "guide-line orient-h series-paper";
+  line.className = "guide-line series-paper";
   if (idx === 0) {
     const label = document.createElement("span");
     label.className = "guide-label guide-label-end";
@@ -126,25 +128,35 @@ function refreshGuides(): void {
   guideNote.hidden = false;
   const paperWidth = paperWidthOf(settings);
   const sideways = settings.mode === "sideways";
-  PAPER_SIZES.forEach((g, i) => {
+  GUIDE_MARKS.forEach((g, i) => {
     const el = guideLineEls[i];
     el.classList.toggle("orient-v", sideways);
     el.classList.toggle("orient-h", !sideways);
     if (sideways) {
-      const x = guideLengthPx(g.widthMm, paperWidth) * viewZoom - editorRoot.scrollLeft;
+      const x = guideLengthPx(g.mm, paperWidth) * viewZoom - editorRoot.scrollLeft;
       el.style.left = `${Math.round(x)}px`;
       el.style.top = "";
     } else {
-      const y = guideLengthPx(g.heightMm, paperWidth) * viewZoom - editorRoot.scrollTop;
+      const y = guideLengthPx(g.mm, paperWidth) * viewZoom - editorRoot.scrollTop;
       el.style.top = `${Math.round(y)}px`;
       el.style.left = "";
     }
   });
-  const band = printBandPx(paperWidth, settings.marginY);
+  // Across the paper width, the margin that applies differs by
+  // mode: sideways stacks lines inside the top/bottom margins,
+  // normal mode wraps inside the left/right margins.
+  const band = printBandPx(paperWidth, sideways ? settings.marginY : settings.marginX);
   [band.startPx, band.endPx].forEach((pos, i) => {
     const el = bandLineEls[i];
-    el.style.display = sideways ? "" : "none";
-    if (sideways) el.style.top = `${Math.round(pos * viewZoom - editorRoot.scrollTop)}px`;
+    el.classList.toggle("orient-h", sideways);
+    el.classList.toggle("orient-v", !sideways);
+    if (sideways) {
+      el.style.top = `${Math.round(pos * viewZoom - editorRoot.scrollTop)}px`;
+      el.style.left = "";
+    } else {
+      el.style.left = `${Math.round(pos * viewZoom - editorRoot.scrollLeft)}px`;
+      el.style.top = "";
+    }
   });
 }
 

@@ -1,13 +1,10 @@
 // Paper-size guides (editor display only, never drawn into the
-// print PNG). The guides mark, along the print-length axis, the
-// side of each A/B sheet that runs along that axis:
-//
-// - Normal mode: the length axis is the sheet's vertical side
-//   (縦の長さ), so the editor shows horizontal lines at each
-//   heightMm from the top (print start edge).
-// - Sideways mode: after rotation the length axis is the sheet's
-//   horizontal side (横の長さ), so the editor shows vertical lines
-//   at each widthMm from the left (print start edge).
+// print PNG). Along the print-length axis the editor marks BOTH
+// sides of each A/B sheet — the horizontal （横） and the vertical
+// （縦） lengths — in both print modes: horizontal lines in normal
+// mode, vertical lines in sideways mode, measured from the print
+// start edge. A separate green pair of lines marks the print-area
+// band across the paper width (inside the margins) in both modes.
 
 export interface PaperSize {
   label: string;
@@ -42,6 +39,38 @@ export function dotsPerMmForWidth(paperWidthPx: number): number {
 export function guideLengthPx(mm: number, paperWidthPx: number): number {
   return mm * dotsPerMmForWidth(paperWidthPx);
 }
+
+export interface GuideMark {
+  mm: number;
+  series: "A" | "B";
+  /** Combined label, e.g. "A6縦・A5横" where two sides coincide. */
+  text: string;
+}
+
+/**
+ * Every distinct length the sheet sides take, ascending, as marks
+ * along the print-length axis — BOTH the horizontal （横） and the
+ * vertical （縦） sides, in both print modes. The sides nest within a
+ * series (A5's width is A6's height, and so on), so each mark belongs
+ * to one series and carries a combined label where two sides share
+ * the same length.
+ */
+export const GUIDE_MARKS: readonly GuideMark[] = (() => {
+  const byMm = new Map<number, { series: "A" | "B"; parts: string[] }>();
+  for (const s of PAPER_SIZES) {
+    for (const [mm, kind] of [
+      [s.widthMm, "横"],
+      [s.heightMm, "縦"],
+    ] as const) {
+      const entry = byMm.get(mm) ?? { series: s.series, parts: [] };
+      entry.parts.push(`${s.label}${kind}`);
+      byMm.set(mm, entry);
+    }
+  }
+  return [...byMm.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([mm, e]) => ({ mm, series: e.series, text: e.parts.join("・") }));
+})();
 
 /**
  * The usable band across the paper width, in print pixels: from the

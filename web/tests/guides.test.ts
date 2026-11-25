@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PAPER_SIZES, dotsPerMmForWidth, guideLengthPx, printBandPx } from "../src/core/guides";
+import { PAPER_SIZES, GUIDE_MARKS, dotsPerMmForWidth, guideLengthPx, printBandPx } from "../src/core/guides";
 
 test("paper sizes: A and B series with portrait width/height", () => {
   assert.deepEqual(
@@ -12,6 +12,22 @@ test("paper sizes: A and B series with portrait width/height", () => {
       ["B5", "B", 182, 257],
       ["A4", "A", 210, 297],
       ["B4", "B", 257, 364],
+    ],
+  );
+});
+
+test("guide marks cover both sides of every size, nested labels combined", () => {
+  assert.deepEqual(
+    GUIDE_MARKS.map((m) => [m.mm, m.series, m.text]),
+    [
+      [105, "A", "A6横"],
+      [128, "B", "B6横"],
+      [148, "A", "A6縦・A5横"],
+      [182, "B", "B6縦・B5横"],
+      [210, "A", "A5縦・A4横"],
+      [257, "B", "B5縦・B4横"],
+      [297, "A", "A4縦"],
+      [364, "B", "B4縦"],
     ],
   );
 });
